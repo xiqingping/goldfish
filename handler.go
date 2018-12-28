@@ -20,6 +20,10 @@ const (
 	Signed
 )
 
+var (
+	bitIndexToVal = [8]byte{0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80}
+)
+
 // A Handler responds to a Modbus request.
 type Handler interface {
 	ServeModbus(w io.Writer, r Request)
@@ -87,34 +91,12 @@ func respond(w io.Writer, resp *Response) {
 
 // reduce takes slice like [1, 0, 1, 0, 0, 1] and reduces that to a byte.
 func reduce(values []Value) []byte {
-	length := len(values) / 8
-	if len(values)%8 > 0 {
-		length++
-	}
-	reduced := make([]byte, length)
+	reduced := make([]byte, (len(values)+7)/8)
 
-	n := length - 1
-
-	// Iterate over 8 values a time.
-	for i := 0; i <= len(values); i = i + 8 {
-		end := i + 8
-		if end > len(values)-1 {
-			end = len(values)
+	for k, v := range values {
+		if v.Get() > 0 {
+			reduced[k/8] |= bitIndexToVal[k%8]
 		}
-
-		b := values[i:end]
-		for i, j := 0, len(b)-1; i < j; i, j = i+1, j-1 {
-			b[i], b[j] = b[j], b[i]
-		}
-
-		for _, v := range b {
-			reduced[n] = reduced[n] << 1
-			if v.Get() > 0 {
-				reduced[n] = reduced[n] | 1
-			}
-		}
-
-		n--
 	}
 
 	return reduced
